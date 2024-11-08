@@ -12,7 +12,19 @@ const SidebarContext = React.createContext<SidebarContextType | undefined>(
 );
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = React.useState(true);
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const isDesktop = window.innerWidth >= 640;
+    setIsOpen(isDesktop);
+
+    const handleResize = () => {
+      setIsOpen(window.innerWidth >= 640);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const toggle = React.useCallback(() => {
     setIsOpen((prev) => !prev);
