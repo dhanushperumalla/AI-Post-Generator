@@ -3,11 +3,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  baseURL: "https://api.studio.nebius.ai/v1/",
-  apiKey: process.env.NEBIUS_API_KEY,
-});
-
 export async function POST(req: Request) {
   try {
     if (!process.env.NEBIUS_API_KEY) {
@@ -16,6 +11,11 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    const client = new OpenAI({
+      baseURL: "https://api.studio.nebius.ai/v1/",
+      apiKey: process.env.NEBIUS_API_KEY,
+    });
 
     const { platform, topic, tone, specialInstructions } = await req.json();
 
