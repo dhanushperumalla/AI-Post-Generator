@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save, Trash, Edit } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface GeneratedContent {
@@ -49,7 +49,6 @@ async function generateContent(
     throw new Error(data.error || `HTTP error! status: ${response.status}`);
   }
 
-  // Validate the response structure
   if (!data.content1 || !data.content2 || !data.content3) {
     throw new Error("Invalid response format from server");
   }
@@ -64,17 +63,8 @@ export default function SocialMediaPostGenerator() {
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [generatedContent, setGeneratedContent] =
     useState<GeneratedContent | null>(null);
-  const [savedPosts, setSavedPosts] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const posts = localStorage.getItem("savedPosts");
-    if (posts) {
-      setSavedPosts(JSON.parse(posts));
-    }
-  }, []);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -84,13 +74,6 @@ export default function SocialMediaPostGenerator() {
         throw new Error("Please fill in all required fields");
       }
 
-      console.log("Sending request with:", {
-        platform,
-        topic,
-        tone,
-        specialInstructions,
-      });
-
       const result = await generateContent(
         platform,
         topic,
@@ -98,14 +81,11 @@ export default function SocialMediaPostGenerator() {
         specialInstructions
       );
 
-      console.log("Received result:", result);
       setGeneratedContent(result);
     } catch (error) {
-      console.error("Detailed error generating posts:", error);
+      console.error("Error generating posts:", error);
       setError(
-        error instanceof Error
-          ? `Error: ${error.message}`
-          : "An unknown error occurred"
+        error instanceof Error ? error.message : "An unknown error occurred"
       );
     } finally {
       setIsGenerating(false);
@@ -113,24 +93,9 @@ export default function SocialMediaPostGenerator() {
   };
 
   const handleSave = (post: string) => {
+    const savedPosts = JSON.parse(localStorage.getItem("savedPosts") || "[]");
     const newPosts = [...savedPosts, post];
-    setSavedPosts(newPosts);
     localStorage.setItem("savedPosts", JSON.stringify(newPosts));
-  };
-
-  const handleDelete = (index: number) => {
-    setSavedPosts(savedPosts.filter((_, i) => i !== index));
-  };
-
-  const handleEdit = (index: number) => {
-    setEditingIndex(index);
-  };
-
-  const handleUpdate = (index: number, newContent: string) => {
-    const updatedPosts = [...savedPosts];
-    updatedPosts[index] = newContent;
-    setSavedPosts(updatedPosts);
-    setEditingIndex(null);
   };
 
   return (
@@ -210,50 +175,6 @@ export default function SocialMediaPostGenerator() {
               "Generate Posts"
             )}
           </Button>
-
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold mb-4">Saved Posts</h2>
-            {savedPosts.map((post, index) => (
-              <Card key={index} className="mb-4">
-                <CardContent>
-                  {editingIndex === index ? (
-                    <Textarea
-                      value={post}
-                      onChange={(e) => handleUpdate(index, e.target.value)}
-                      className="mb-2"
-                    />
-                  ) : (
-                    <p>{post}</p>
-                  )}
-                </CardContent>
-                <CardFooter>
-                  {editingIndex === index ? (
-                    <Button onClick={() => handleUpdate(index, post)}>
-                      Save Changes
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleEdit(index)}
-                        className="mr-2"
-                      >
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleDelete(index)}
-                      >
-                        <Trash className="mr-2 h-4 w-4" />
-                        Delete
-                      </Button>
-                    </>
-                  )}
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
         </div>
 
         <div>
@@ -268,17 +189,10 @@ export default function SocialMediaPostGenerator() {
                   <CardContent>
                     <p>{content}</p>
                   </CardContent>
-                  <CardFooter className="flex justify-between">
+                  <CardFooter>
                     <Button onClick={() => handleSave(content)}>
                       <Save className="mr-2 h-4 w-4" />
                       Save
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleEdit(savedPosts.length)}
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
                     </Button>
                   </CardFooter>
                 </Card>
