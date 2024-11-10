@@ -6,6 +6,7 @@ import { Navbar } from "@/components/ui/navbar";
 import { Sidebar } from "@/components/ui/sidebar";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 import { cn } from "@/lib/utils";
+import { Toaster } from "sonner";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -51,6 +52,7 @@ export default function RootLayout({
               </main>
             </div>
           </SidebarProvider>
+          <Toaster richColors position="top-center" closeButton />
         </ThemeProvider>
       </body>
     </html>

@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,13 +20,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Copy } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { toast } from "sonner";
 
 interface GeneratedContent {
   content1: string;
   content2: string;
   content3: string;
+}
+
+interface SaveButtonState {
+  [key: string]: boolean;
+}
+
+interface CopyButtonState {
+  [key: string]: boolean;
 }
 
 async function generateContent(
@@ -62,13 +71,36 @@ export default function SocialMediaPostGenerator() {
   const [tone, setTone] = useState("");
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [generatedContent, setGeneratedContent] =
-    useState<GeneratedContent | null>(null);
+    useState<GeneratedContent | null>(() => {
+      // Try to get previously generated content from localStorage
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("generatedContent");
+        return saved ? JSON.parse(saved) : null;
+      }
+      return null;
+    });
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedStates, setSavedStates] = useState<SaveButtonState>({});
+  const [copiedStates, setCopiedStates] = useState<CopyButtonState>({});
+
+  // Save generated content to localStorage when it changes
+  useEffect(() => {
+    if (generatedContent) {
+      localStorage.setItem(
+        "generatedContent",
+        JSON.stringify(generatedContent)
+      );
+    }
+  }, [generatedContent]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError(null);
+    // Only clear states, keep content until new content is generated
+    setSavedStates({});
+    setCopiedStates({});
+
     try {
       if (!platform || !topic || !tone) {
         throw new Error("Please fill in all required fields");
@@ -81,7 +113,14 @@ export default function SocialMediaPostGenerator() {
         specialInstructions
       );
 
+      // Now we clear the previous content and set new content
       setGeneratedContent(result);
+
+      // Reset form fields after successful generation
+      setPlatform("");
+      setTopic("");
+      setTone("");
+      setSpecialInstructions("");
     } catch (error) {
       console.error("Error generating posts:", error);
       setError(
@@ -92,10 +131,69 @@ export default function SocialMediaPostGenerator() {
     }
   };
 
-  const handleSave = (post: string) => {
-    const savedPosts = JSON.parse(localStorage.getItem("savedPosts") || "[]");
-    const newPosts = [...savedPosts, post];
-    localStorage.setItem("savedPosts", JSON.stringify(newPosts));
+  const handleCopy = async (key: string, content: string) => {
+    try {
+      // Use the Clipboard API with a fallback
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(content);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = content;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand("copy");
+          textArea.remove();
+        } catch (err) {
+          console.error("Fallback: Oops, unable to copy", err);
+          textArea.remove();
+          throw new Error("Failed to copy");
+        }
+      }
+
+      // Update copied state for this specific post
+      setCopiedStates((prev) => ({ ...prev, [key]: true }));
+      toast.success("Post copied to clipboard!", {
+        description: "Ready to paste anywhere",
+        dismissible: true,
+      });
+
+      // Reset copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedStates((prev) => ({ ...prev, [key]: false }));
+      }, 2000);
+    } catch (err) {
+      toast.error("Failed to copy post");
+      console.error("Copy failed", err);
+    }
+  };
+
+  const handleSave = (key: string, content: string) => {
+    try {
+      const savedPosts = JSON.parse(localStorage.getItem("savedPosts") || "[]");
+      const newPosts = [...savedPosts, content];
+      localStorage.setItem("savedPosts", JSON.stringify(newPosts));
+
+      // Update saved state for this specific post
+      setSavedStates((prev) => ({ ...prev, [key]: true }));
+      toast.success("Post saved successfully!", {
+        description: "You can find it in the Saved Posts section",
+        dismissible: true,
+      });
+
+      // Reset saved state after 2 seconds
+      setTimeout(() => {
+        setSavedStates((prev) => ({ ...prev, [key]: false }));
+      }, 2000);
+    } catch (error) {
+      toast.error("Failed to save post");
+      console.error("Save failed", error);
+    }
   };
 
   return (
@@ -115,7 +213,7 @@ export default function SocialMediaPostGenerator() {
         <div className="space-y-4">
           <div>
             <Label htmlFor="platform">Platform</Label>
-            <Select onValueChange={setPlatform}>
+            <Select value={platform} onValueChange={setPlatform}>
               <SelectTrigger id="platform">
                 <SelectValue placeholder="Select platform" />
               </SelectTrigger>
@@ -140,7 +238,7 @@ export default function SocialMediaPostGenerator() {
 
           <div>
             <Label htmlFor="tone">Tone</Label>
-            <Select onValueChange={setTone}>
+            <Select value={tone} onValueChange={setTone}>
               <SelectTrigger id="tone">
                 <SelectValue placeholder="Select tone" />
               </SelectTrigger>
@@ -189,10 +287,23 @@ export default function SocialMediaPostGenerator() {
                   <CardContent>
                     <p>{content}</p>
                   </CardContent>
-                  <CardFooter>
-                    <Button onClick={() => handleSave(content)}>
+                  <CardFooter className="flex gap-2">
+                    <Button
+                      onClick={() => handleSave(key, content)}
+                      disabled={savedStates[key]}
+                      className="min-w-[100px]"
+                    >
                       <Save className="mr-2 h-4 w-4" />
-                      Save
+                      {savedStates[key] ? "Saved!" : "Save"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleCopy(key, content)}
+                      disabled={copiedStates[key]}
+                      className="min-w-[100px]"
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      {copiedStates[key] ? "Copied!" : "Copy"}
                     </Button>
                   </CardFooter>
                 </Card>
