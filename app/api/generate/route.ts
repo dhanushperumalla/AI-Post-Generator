@@ -56,47 +56,16 @@ export async function POST(req: Request) {
       ],
     });
 
-    if (!completion.choices[0]?.message?.content) {
-      throw new Error("No content received from AI");
+    const result = completion.choices[0]?.message?.content;
+    if (!result) {
+      throw new Error("No content generated");
     }
 
-    try {
-      let contentStr = completion.choices[0].message.content.trim();
-
-      if (contentStr.startsWith("```")) {
-        contentStr = contentStr
-          .replace(/^```(?:json)?\n/, "")
-          .replace(/\n```$/, "");
-      }
-
-      if (contentStr.includes("{")) {
-        contentStr = contentStr.substring(contentStr.indexOf("{"));
-      }
-
-      const generatedContent = JSON.parse(contentStr);
-
-      if (
-        !generatedContent.content1 ||
-        !generatedContent.content2 ||
-        !generatedContent.content3
-      ) {
-        throw new Error("Invalid response format from AI");
-      }
-
-      return NextResponse.json(generatedContent);
-    } catch (parseError) {
-      console.error("JSON Parse Error:", parseError);
-      console.log("Raw content:", completion.choices[0].message.content);
-      throw new Error("Failed to parse AI response as JSON");
-    }
+    return NextResponse.json(JSON.parse(result));
   } catch (error) {
     console.error("Detailed API Error:", error);
     return NextResponse.json(
-      {
-        error:
-          "Failed to generate content: " +
-          (error instanceof Error ? error.message : "Unknown error"),
-      },
+      { error: "Failed to generate content" },
       { status: 500 }
     );
   }

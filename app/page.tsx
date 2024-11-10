@@ -20,14 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save, Copy } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Save, Copy, Download, Trash } from "lucide-react";
 
 interface GeneratedContent {
   content1: string;
   content2: string;
   content3: string;
+  image?: string;
 }
 
 interface SaveButtonState {
@@ -42,28 +44,86 @@ async function generateContent(
   platform: string,
   topic: string,
   tone: string,
-  specialInstructions: string
+  specialInstructions: string,
+  withImage: boolean
 ): Promise<GeneratedContent> {
-  const response = await fetch("/api/generate", {
+  const postResponse = await fetch("/api/generate", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ platform, topic, tone, specialInstructions }),
   });
 
-  const data = await response.json();
+  const postData = await postResponse.json();
 
-  if (!response.ok) {
-    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+  if (!postResponse.ok) {
+    throw new Error(
+      postData.error || `HTTP error! status: ${postResponse.status}`
+    );
   }
 
-  if (!data.content1 || !data.content2 || !data.content3) {
-    throw new Error("Invalid response format from server");
+  if (withImage) {
+    try {
+      const imageResponse = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: topic }),
+      });
+
+      const imageData = await imageResponse.json();
+
+      if (imageResponse.ok && imageData.image) {
+        return {
+          ...postData,
+          image: imageData.image,
+        };
+      }
+    } catch (error) {
+      console.error("Image generation failed:", error);
+    }
   }
 
-  return data;
+  return postData;
 }
+
+const handleDownload = async (imageUrl: string) => {
+  try {
+    // Remove the data:image/jpeg;base64, prefix
+    const base64Data = imageUrl.split(",")[1];
+
+    // Convert base64 to blob
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "image/jpeg" });
+
+    // Create download link
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `generated-image-${Date.now()}.jpg`;
+
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Cleanup
+    URL.revokeObjectURL(downloadUrl);
+
+    toast.success("Image download started!", {
+      description: "Check your downloads folder",
+      dismissible: true,
+    });
+  } catch (error) {
+    toast.error("Failed to download image");
+    console.error("Download failed", error);
+  }
+};
 
 export default function SocialMediaPostGenerator() {
   const [platform, setPlatform] = useState("");
@@ -83,6 +143,7 @@ export default function SocialMediaPostGenerator() {
   const [error, setError] = useState<string | null>(null);
   const [savedStates, setSavedStates] = useState<SaveButtonState>({});
   const [copiedStates, setCopiedStates] = useState<CopyButtonState>({});
+  const [includeImage, setIncludeImage] = useState(false);
 
   // Save generated content to localStorage when it changes
   useEffect(() => {
@@ -97,7 +158,6 @@ export default function SocialMediaPostGenerator() {
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError(null);
-    // Only clear states, keep content until new content is generated
     setSavedStates({});
     setCopiedStates({});
 
@@ -110,17 +170,11 @@ export default function SocialMediaPostGenerator() {
         platform,
         topic,
         tone,
-        specialInstructions
+        specialInstructions,
+        includeImage
       );
 
-      // Now we clear the previous content and set new content
       setGeneratedContent(result);
-
-      // Reset form fields after successful generation
-      setPlatform("");
-      setTopic("");
-      setTone("");
-      setSpecialInstructions("");
     } catch (error) {
       console.error("Error generating posts:", error);
       setError(
@@ -176,7 +230,11 @@ export default function SocialMediaPostGenerator() {
   const handleSave = (key: string, content: string) => {
     try {
       const savedPosts = JSON.parse(localStorage.getItem("savedPosts") || "[]");
-      const newPosts = [...savedPosts, content];
+      const newPost = {
+        content,
+        type: key === "image" ? "image" : "text",
+      };
+      const newPosts = [...savedPosts, newPost];
       localStorage.setItem("savedPosts", JSON.stringify(newPosts));
 
       // Update saved state for this specific post
@@ -194,6 +252,17 @@ export default function SocialMediaPostGenerator() {
       toast.error("Failed to save post");
       console.error("Save failed", error);
     }
+  };
+
+  const handleDelete = (key: string) => {
+    setGeneratedContent((prev) => {
+      if (!prev) return null;
+      const { [key]: deleted, ...rest } = prev;
+      // Save the updated content to localStorage
+      localStorage.setItem("generatedContent", JSON.stringify(rest));
+      return rest;
+    });
+    toast.success("Post deleted successfully!");
   };
 
   return (
@@ -263,6 +332,20 @@ export default function SocialMediaPostGenerator() {
             />
           </div>
 
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="includeImage"
+              checked={includeImage}
+              onCheckedChange={(checked: boolean) => setIncludeImage(checked)}
+            />
+            <Label
+              htmlFor="includeImage"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Generate with AI Image
+            </Label>
+          </div>
+
           <Button onClick={handleGenerate} disabled={isGenerating}>
             {isGenerating ? (
               <>
@@ -278,36 +361,87 @@ export default function SocialMediaPostGenerator() {
         <div>
           <h2 className="text-xl font-semibold mb-4">Generated Posts</h2>
           <div className="space-y-4">
+            {generatedContent?.image && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Generated Image</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <img
+                    src={generatedContent.image}
+                    alt="AI Generated"
+                    className="w-full h-auto rounded-md"
+                  />
+                </CardContent>
+                <CardFooter className="flex gap-2">
+                  <Button
+                    onClick={() => handleSave("image", generatedContent.image!)}
+                    disabled={savedStates["image"]}
+                    className="min-w-[100px]"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {savedStates["image"] ? "Saved!" : "Save"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDownload(generatedContent.image!)}
+                    className="min-w-[100px]"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => handleDelete("image")}
+                    className="min-w-[100px]"
+                  >
+                    <Trash className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
             {generatedContent &&
-              Object.entries(generatedContent).map(([key, content], index) => (
-                <Card key={key}>
-                  <CardHeader>
-                    <CardTitle>Post {index + 1}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p>{content}</p>
-                  </CardContent>
-                  <CardFooter className="flex gap-2">
-                    <Button
-                      onClick={() => handleSave(key, content)}
-                      disabled={savedStates[key]}
-                      className="min-w-[100px]"
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      {savedStates[key] ? "Saved!" : "Save"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleCopy(key, content)}
-                      disabled={copiedStates[key]}
-                      className="min-w-[100px]"
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      {copiedStates[key] ? "Copied!" : "Copy"}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
+              Object.entries(generatedContent)
+                .filter(([key]) => key !== "image")
+                .map(([key, content], index) => (
+                  <Card key={key}>
+                    <CardHeader>
+                      <CardTitle>Post {index + 1}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p>{content as string}</p>
+                    </CardContent>
+                    <CardFooter className="flex gap-2">
+                      <Button
+                        onClick={() => handleSave(key, content as string)}
+                        disabled={savedStates[key]}
+                        className="min-w-[100px]"
+                      >
+                        <Save className="mr-2 h-4 w-4" />
+                        {savedStates[key] ? "Saved!" : "Save"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleCopy(key, content as string)}
+                        disabled={copiedStates[key]}
+                        className="min-w-[100px]"
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        {copiedStates[key] ? "Copied!" : "Copy"}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleDelete(key)}
+                        className="min-w-[100px]"
+                      >
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
           </div>
         </div>
       </div>
