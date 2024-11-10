@@ -259,28 +259,29 @@ export default function SocialMediaPostGenerator() {
     setGeneratedContent((prev) => {
       if (!prev) return null;
 
-      // Create a new object with the required properties
-      const newContent: GeneratedContent = {
-        content1: prev.content1,
-        content2: prev.content2,
-        content3: prev.content3,
-      };
+      // Create a new object without the deleted content
+      const newContent: Partial<GeneratedContent> = {};
 
-      // If we're not deleting the image and it exists, keep it
-      if (key !== "image" && prev.image) {
-        newContent.image = prev.image;
+      // Copy all content except the deleted one
+      Object.entries(prev).forEach(([k, v]) => {
+        if (k !== key) {
+          newContent[k as keyof GeneratedContent] = v;
+        }
+      });
+
+      // If no content left, return null
+      if (Object.keys(newContent).length === 0) {
+        localStorage.removeItem("generatedContent");
+        return null;
       }
 
-      // Remove the specified key if it's not 'image'
-      if (key === "content1" || key === "content2" || key === "content3") {
-        delete newContent[key];
-      }
-
-      // Save to localStorage
+      // Update localStorage
       localStorage.setItem("generatedContent", JSON.stringify(newContent));
 
-      return Object.keys(newContent).length > 0 ? newContent : null;
+      // Return the new content
+      return newContent as GeneratedContent;
     });
+
     toast.success("Post deleted successfully!");
   };
 
