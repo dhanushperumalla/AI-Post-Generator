@@ -24,6 +24,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Save, Copy, Download, Trash } from "lucide-react";
+import Image from "next/image";
 
 interface GeneratedContent {
   content1: string;
@@ -257,10 +258,28 @@ export default function SocialMediaPostGenerator() {
   const handleDelete = (key: string) => {
     setGeneratedContent((prev) => {
       if (!prev) return null;
-      const { [key]: deleted, ...rest } = prev;
-      // Save the updated content to localStorage
-      localStorage.setItem("generatedContent", JSON.stringify(rest));
-      return rest;
+
+      // Create a new object with the required properties
+      const newContent: GeneratedContent = {
+        content1: prev.content1,
+        content2: prev.content2,
+        content3: prev.content3,
+      };
+
+      // If we're not deleting the image and it exists, keep it
+      if (key !== "image" && prev.image) {
+        newContent.image = prev.image;
+      }
+
+      // Remove the specified key if it's not 'image'
+      if (key === "content1" || key === "content2" || key === "content3") {
+        delete newContent[key];
+      }
+
+      // Save to localStorage
+      localStorage.setItem("generatedContent", JSON.stringify(newContent));
+
+      return Object.keys(newContent).length > 0 ? newContent : null;
     });
     toast.success("Post deleted successfully!");
   };
@@ -367,11 +386,15 @@ export default function SocialMediaPostGenerator() {
                   <CardTitle>Generated Image</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <img
-                    src={generatedContent.image}
-                    alt="AI Generated"
-                    className="w-full h-auto rounded-md"
-                  />
+                  <div className="relative w-full aspect-square">
+                    <Image
+                      src={generatedContent.image}
+                      alt="AI Generated"
+                      fill
+                      className="rounded-md object-cover"
+                      priority
+                    />
+                  </div>
                 </CardContent>
                 <CardFooter className="flex gap-2">
                   <Button

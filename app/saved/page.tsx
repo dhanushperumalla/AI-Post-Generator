@@ -12,6 +12,8 @@ import { Edit, Trash, Copy, Save, Download } from "lucide-react";
 
 import { toast } from "sonner";
 
+import Image from "next/image";
+
 interface CopyButtonState {
   [key: number]: boolean;
 }
@@ -184,11 +186,15 @@ export default function SavedPosts() {
           <Card key={index}>
             <CardContent className="pt-4">
               {post.type === "image" ? (
-                <img
-                  src={post.content}
-                  alt="Saved content"
-                  className="w-full h-auto rounded-md mb-4"
-                />
+                <div className="relative w-full aspect-square">
+                  <Image
+                    src={post.content}
+                    alt="Saved content"
+                    fill
+                    className="rounded-md object-cover"
+                    priority
+                  />
+                </div>
               ) : (
                 <p>{post.content}</p>
               )}
