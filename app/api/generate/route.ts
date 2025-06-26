@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       temperature: 0.6,
       max_tokens: 512,
       top_p: 0.9,
-      model: "meta-llama/Meta-Llama-3.1-70B-Instruct-fast",
+      model: "meta-llama/Meta-Llama-3.1-70B-Instruct",
       messages: [
         {
           role: "system",
